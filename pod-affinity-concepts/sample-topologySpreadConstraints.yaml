@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-app
+  namespace: demo
+  labels:
+    app: sample-app
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: sample-app
+  template:
+    metadata:
+      labels:
+        app: sample-app
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27
+          ports:
+            - containerPort: 80
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+            requests:
+              memory: "10Mi"
+              cpu: "10m"
+      topologySpreadConstraints:
+          # The difference in the number of pods between any two nodes should not exceed 1
+        - maxSkew: 1
+          # Specifies the key used to identify the topology domain.
+          #
+          # The provided value means the pods will be spread across different
+          # nodes based on their hostnames.
+          topologyKey: "kubernetes.io/hostname"
+          # Defines the behavior when the constraints cannot be satisfied.
+          #
+          # The provided value indicated that if the contraints cannot be met,
+          # the scheduler should not schedule the pod.
+          whenUnsatisfiable: DoNotSchedule
+          # Apply the constraints to the specified pods.
+          labelSelector:
+            matchLabels:
+              app: sample-app
