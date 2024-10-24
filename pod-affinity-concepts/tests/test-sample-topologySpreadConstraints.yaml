@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: validate-even-distribution
+  namespace: demo
+spec:
+  template:
+    metadata:
+      name: validate-even-distribution
+    spec:
+      containers:
+      - name: validation
+        image: bitnami/kubectl:1.31.2
+        command:
+        - /bin/bash
+        - -c
+        - |
+          echo "Waiting for pods to be scheduled..."
+          kubectl wait --for=condition=available --timeout=120s deployment/sample-app
+
+          echo "Validating even pod distribution across nodes..."
+          pod_distribution=$(kubectl get pods -o wide -n demo --selector=app=sample-app --no-headers | awk '{print $7}' | sort | uniq -c)
+
+          echo "Pod Distribution:"
+          echo "$pod_distribution"
+
+          node_count=$(kubectl get nodes --no-headers | wc -l)
+          skew_max=1
+          
+          # Count how many times each node has a pod
+          valid=true
+          while read -r count node; do
+            if [ "$count" -gt $((node_count + skew_max)) ]; then
+              echo "FAIL: Node $node has more than $((node_count + skew_max)) pods."
+              valid=false
+            fi
+          done <<< "$pod_distribution"
+
+          if [ "$valid" = true ]; then
+            echo "PASS: Pods are evenly distributed."
+          else
+            echo "FAIL: Pods are not evenly distributed."
+          fi
+      restartPolicy: Never
+      serviceAccountName: testing-sa
