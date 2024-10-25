@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: validate-pod-affinity
+  namespace: demo
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      name: validate-pod-affinity
+      labels:
+        app: validate-pod-affinity
+    spec:
+      containers:
+      - name: validation
+        image: bitnami/kubectl:1.31.2
+        command:
+        - /bin/bash
+        - -c
+        - |
+          echo "Waiting for pods to be scheduled..."
+          if ! kubectl wait --for=condition=available --timeout=120s deployment/sample-app; then
+            echo "FAIL: Deployment 'sample-app' not found."
+          elif ! kubectl wait --for=condition=available --timeout=120s deployment/backend; then
+            echo "FAIL: Deployment 'backend' not found."
+          else
+            echo "Both deployments are available."
+            kubectl get pods -o wide -n demo --selector=app=sample-app
+            kubectl get pods -o wide -n demo --selector=app=backend
+            
+            echo "Validating pod affinity..."            
+            sample_app_nodes=$(kubectl get pods -o wide -n demo --selector=app=sample-app --no-headers | awk '{print $7}' | sort | uniq)
+            backend_nodes=$(kubectl get pods -o wide -n demo --selector=app=backend --no-headers | awk '{print $7}' | sort | uniq)
+
+            echo "Sample App Nodes:"
+            echo "$sample_app_nodes"
+            echo "Backend Nodes:"
+            echo "$backend_nodes"
+
+            valid=true
+            for node in $sample_app_nodes; do
+              if ! echo "$backend_nodes" | grep -q "$node"; then
+                echo "FAIL: Node $node has sample-app pods but no backend pods."
+                valid=false
+              fi
+            done
+
+            if [ "$valid" = true ]; then
+              echo "PASS: Pods are co-located as per pod affinity rules."
+            else
+              echo "FAIL: Pods are not co-located as per pod affinity rules."
+            fi
+          fi
+      restartPolicy: Never
+      serviceAccountName: testing-sa
