@@ -22,30 +22,55 @@ spec:
           if ! kubectl wait --for=condition=available --timeout=120s deployment/sample-app; then
             echo "FAIL: Deployment 'sample-app' not found."
           else
+            echo "Retrieving pods deployment information..."
             kubectl get pods -o wide -n demo --selector=app=sample-app
-            
-            echo "Validating even pod distribution across nodes..."
-            pod_distribution=$(kubectl get pods -o wide -n demo --selector=app=sample-app --no-headers | awk '{print $7}' | sort | uniq -c)
 
-            echo "Pod Distribution:"
-            echo "$pod_distribution"
+            echo "Retrieving skew_max value from deployment configuration..."
+            skew_max=$(kubectl get deployment sample-app -n demo -o jsonpath='{.spec.template.spec.topologySpreadConstraints[0].maxSkew}')
 
-            node_count=$(kubectl get nodes --no-headers | wc -l)
-            skew_max=1
-            
-            # Count how many times each node has a pod
-            valid=true
-            while read -r count node; do
-              if [ "$count" -gt $((node_count + skew_max)) ]; then
-                echo "FAIL: Node $node has more than $((node_count + skew_max)) pods."
-                valid=false
-              fi
-            done <<< "$pod_distribution"
-
-            if [ "$valid" = true ]; then
-              echo "PASS: Pods are evenly distributed."
+            if [ -z "$skew_max" ]; then
+              echo "FAIL: maxSkew is not configured in the topologySpreadConstraints."
             else
-              echo "FAIL: Pods are not evenly distributed."
+              echo "skew_max value: $skew_max"
+              
+              echo "Validating even pod distribution across nodes..."
+              pod_distribution=$(kubectl get pods -o wide -n demo --selector=app=sample-app --no-headers | awk '{print $7}' | sort | uniq -c)
+
+              echo "Pod Distribution:"
+              echo "$pod_distribution"
+
+              node_count=$(kubectl get nodes --no-headers | wc -l)
+              nodes_with_pods=$(echo "$pod_distribution" | wc -l)
+
+              if [ "$nodes_with_pods" -lt "$node_count" ]; then
+                echo "FAIL: Pods are not scheduled across all nodes."
+              else
+                # Count how many times each node has a pod
+                valid=true
+                readarray -t pod_counts <<< "$pod_distribution"
+                for i in "${!pod_counts[@]}"; do
+                  for j in "${!pod_counts[@]}"; do
+                    if [ "$i" -ne "$j" ]; then
+                      count_i=$(echo "${pod_counts[$i]}" | awk '{print $1}')
+                      node_i=$(echo "${pod_counts[$i]}" | awk '{print $2}')
+                      count_j=$(echo "${pod_counts[$j]}" | awk '{print $1}')
+                      node_j=$(echo "${pod_counts[$j]}" | awk '{print $2}')
+                      if [ $((count_i - count_j)) -gt "$skew_max" ] || [ $((count_j - count_i)) -gt "$skew_max" ]; then
+                        echo "FAIL: The difference between node $i:$node_i and node $j:$node_j exceeds $skew_max."
+                        valid=false
+                      else
+                        echo "PASS: The difference between node $i:$node_i and node $j:$node_j does not exceed $skew_max."
+                      fi
+                    fi
+                  done
+                done
+
+                if [ "$valid" = true ]; then
+                  echo "PASS: Pods are evenly distributed."
+                else
+                  echo "FAIL: Pods are not evenly distributed."
+                fi
+              fi
             fi
           fi
       restartPolicy: Never
