@@ -58,12 +58,47 @@ services:
       timeout: 5s
       retries: 5
 
+  pg_standby2:
+    image: postgres:17
+    depends_on:
+      pg_primary:
+        condition: service_healthy
+      pg_standby:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${PG_STANDBY_USER}
+      POSTGRES_PASSWORD: ${PG_STANDBY_PASSWORD}
+      POSTGRES_DB: ${PG_STANDBY_DB}
+      POSTGRES_HOST_AUTH_METHOD: ${PG_HBA_ENTRY}
+      POSTGRES_INITDB_ARGS: ${PG_INITDB_ARGS}
+    ports:
+      - ${PG_STANDBY_DB_PORT}
+    volumes:
+      - pg_standby_data2:/var/lib/postgresql/data
+      # Database initialization
+      - ./init/standby_init2.sql:/docker-entrypoint-initdb.d/standby_init.sql
+      # Shared schema file
+      - ./init/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./init/config/standby.conf:/standby.conf
+    command: >
+      postgres -c config_file=/standby.conf
+
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   replication_test:
     image: postgres:17
     depends_on:
       pg_primary:
         condition: service_healthy
       pg_standby:
+        condition: service_healthy
+      pg_standby2:
         condition: service_healthy
     env_file:
       - .env
@@ -85,6 +120,7 @@ services:
 volumes:
   pg_primary_data:
   pg_standby_data:
+  pg_standby_data2:
 
 
 

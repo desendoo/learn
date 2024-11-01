@@ -1,0 +1,66 @@
+
+
+
+
+### Tests
+## query standby
+$env:PGPASSWORD = "sub-password"
+docker exec -it postgresql-pg_standby-1 psql -U sub-user -d standby_db -c "SELECT * FROM sample_table;"
+
+## query primary
+$env:PGPASSWORD = "pub-password"
+docker exec -it postgresql-pg_primary-1 psql -U pub-user -d primary_db -c "SELECT * FROM sample_table;"
+
+## query data
+psql -h pg_standby -p 5432 -U sub-user -d standby_db -c "SELECT * FROM sample_table;"
+psql -h pg_primary -p 5432 -U pub-user -d primary_db -c "SELECT * FROM sample_table;"
+
+## insert data
+psql -h pg_primary -p 5432 -U pub-user -d primary_db -c "INSERT INTO sample_table (data) VALUES ('Replication test ' || (SELECT COALESCE(MAX(id), 0) + 1 FROM sample_table));"
+docker exec -it postgresql-pg_primary-1 psql -h pg_primary -p 5432 -U pub-user -d primary_db -c "INSERT INTO sample_table (data) VALUES ('Replication test ' || (SELECT COALESCE(MAX(id), 0) + 1 FROM sample_table));"
+
+## check replication slots
+docker exec -it postgresql-pg_standby-1 psql -U sub-user -d standby_db -c "SELECT * FROM pg_replication_slots";
+docker exec -it postgresql-pg_primary-1 psql -U pub-user -d primary_db -xc "SELECT * FROM pg_replication_slots";
+
+## check subscription
+docker exec -it postgresql-pg_standby-1 psql -U sub-user -d standby_db -xc "SELECT * FROM pg_subscription";
+
+## check replication status
+docker exec -it postgresql-pg_primary-1 psql -U pub-user -d primary_db -xc "SELECT * FROM pg_stat_replication";
+
+### Debug
+docker logs -f postgresql-replication_test-1
+docker exec -it postgresql-pg_standby-1 bash
+docker exec -it postgresql-pg_primary-1 bash
+
+docker exec -it postgresql-pg_standby-1 psql -U sub-user -d standby_db
+docker exec -it postgresql-pg_primary-1 psql -U pub-user -d primary_db
+
+## Check the replication slot type
+SELECT slot_name, slot_type, active FROM pg_replication_slots;
+SELECT * FROM pg_subscription;
+SELECT * FROM pg_replication_slots;
+SELECT * FROM pg_stat_replication;
+
+
+# primary_init.sql
+-- Set authentication method for host connections
+ALTER SYSTEM SET password_encryption = 'scram-sha-256';
+
+-- Reload the pg_hba.conf file to apply changes
+SELECT pg_reload_conf();
+
+
+
+# standby_init.sql
+pg_basebackup --pgdata=/var/lib/postgresql/data -R --slot=my_subscription --host=pg_primary --port=5432 --username=rep_user --password
+
+pg_basebackup --pgdata=/var/lib/postgresql/data -R --slot=my_subscription --host=pg_primary --port=5432 --username=pub-user --password
+
+
+# SELECT 1 FROM pg_subscription WHERE subname = 'my_subscription';
+
+#         CREATE SUBSCRIPTION my_subscription
+#             CONNECTION 'host=pg_primary port=5432 dbname=primary_db user=rep_user password=rep_password'
+#             PUBLICATION my_publication;
