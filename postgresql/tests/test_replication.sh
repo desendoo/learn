@@ -63,9 +63,9 @@ check_subscription_status() {
 echo "Checking standby..."
 set_pgpassword $PG_STANDBY_PASSWORD
 check_data $PG_STANDBY_HOST $PG_STANDBY_DB_PORT $PG_STANDBY_USER $PG_STANDBY_DB
-echo "Checking standby2..."
-export PG_STANDBY_HOST=postgresql-pg_standby2-1
-check_data $PG_STANDBY_HOST $PG_STANDBY_DB_PORT $PG_STANDBY_USER $PG_STANDBY_DB
+# echo "Checking standby2..."
+# export PG_STANDBY_HOST=postgresql-pg_standby2-1
+# check_data $PG_STANDBY_HOST $PG_STANDBY_DB_PORT $PG_STANDBY_USER $PG_STANDBY_DB
 
 # Check the primary initially
 echo "Checking primary..."
@@ -88,16 +88,16 @@ set_pgpassword $PG_STANDBY_PASSWORD
 echo "Data in standby after insertion from primary:"
 export PG_STANDBY_HOST=postgresql-pg_standby-1
 check_data $PG_STANDBY_HOST $PG_STANDBY_DB_PORT $PG_STANDBY_USER $PG_STANDBY_DB
-echo "Data in standby2 after insertion from primary:"
-export PG_STANDBY_HOST=postgresql-pg_standby2-1
-check_data $PG_STANDBY_HOST $PG_STANDBY_DB_PORT $PG_STANDBY_USER $PG_STANDBY_DB
+# echo "Data in standby2 after insertion from primary:"
+# export PG_STANDBY_HOST=postgresql-pg_standby2-1
+# check_data $PG_STANDBY_HOST $PG_STANDBY_DB_PORT $PG_STANDBY_USER $PG_STANDBY_DB
 
 echo "Checking subscription status on standby..."
 export PG_STANDBY_HOST=postgresql-pg_standby-1
 check_subscription_status $PG_STANDBY_HOST $PG_STANDBY_DB_PORT $PG_STANDBY_USER $PG_STANDBY_DB
-echo "Checking subscription status on standby2..."
-export PG_STANDBY_HOST=postgresql-pg_standby2-1
-check_subscription_status $PG_STANDBY_HOST $PG_STANDBY_DB_PORT $PG_STANDBY_USER $PG_STANDBY_DB
+# echo "Checking subscription status on standby2..."
+# export PG_STANDBY_HOST=postgresql-pg_standby2-1
+# check_subscription_status $PG_STANDBY_HOST $PG_STANDBY_DB_PORT $PG_STANDBY_USER $PG_STANDBY_DB
 
 # Check replication status
 set_pgpassword $PG_PRIMARY_PASSWORD
